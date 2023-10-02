@@ -61,20 +61,21 @@ async def on_member_update(before, after):
 @guild()
 @admin()
 async def name(ctx, member: discord.Member, nick):
+    nickFormat = ''.join(nick.lower().split())[:32]
     with conn.cursor() as cur:
         cur.execute(
             f"""INSERT INTO allowed_names (id, name)
-            VALUES ({member.id}, '{nick}')
+            VALUES ({member.id}, '{nickFormat}')
             ON CONFLICT (id)
             DO UPDATE
             SET name = EXCLUDED.name;"""
         )
     conn.commit()
     try:
-        await member.edit(nick=nick)
-        await ctx.send(f"{member} aka {nick}")
-    except: ## add the correct catch
-        await ctx.send(f"error insufficient perms")
+        await on_member_update(member, member)
+        await ctx.send(f"{member} aka {nickFormat}")
+    except:
+        await ctx.send(f"Bot Could not compleate transaction")
 
 @client.command()
 @guild()
@@ -82,12 +83,24 @@ async def name(ctx, member: discord.Member, nick):
 async def runall(ctx):
     for member in ctx.guild.members:
         expected = get_expected(member.id)
+        if expected is Null:
+            pass
+            ##give role
         if expected in member.display_name:
             continue
         try:
             await member.edit(nick=expected)
         except Exception as e:
             print(e)
+            ## give role
+
+@client.command()
+@guild()
+@admin()
+async def delete(ctx, member: discord.Member)
+    with conn.cursor() as cur:
+        cur.execute(f"DELETE FROM allowed_names WHERE id = {member.id}")
+    conn.commit()
 
 @client.command()
 @guild()
@@ -102,7 +115,6 @@ async def whois(ctx, member: discord.Member):
 @client.command()
 async def status(ctx):
     await ctx.send('I am online!!')
-    print(type(ctx.author.id))
 
 @client.event
 async def on_message(message):
