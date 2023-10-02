@@ -27,39 +27,88 @@ class NoPrivateMessages(commands.CheckFailure):
 class NotAdmin(commands.CheckFailure):
     pass
 
+def guild():
+    async def predicate(ctx):
+        if ctx.guild is None:
+            raise NoPrivateMessages('Hey no DMs!')
+        return True
+    return commands.check(predicate)
+
+def admin():
+    async def predicate(ctx):
+        if not ctx.author.guild_permissions.administrator:
+            raise NotAdmin(f'{ctx.author} are not elevated enough to execute this command')
+        return True
+    return commands.check(predicate)
+
 def get_expected(id: int):
     with conn.cursor() as cur:
         cur.execute(f"SELECT NAME FROM allowed_names WHERE id = {id};")
-        return cur.fetchone()
+        data = cur.fetchone()
+        return data[0].strip() if data is not None else None
 
 @client.event
 async def on_member_update(before, after):
+    print("updating")
     expected = get_expected(after.id);
-    print(expected)
-    if expected in after.display_name:
-        print("username ok")
+    if expected is None:
         return
-    print(after.display_name)
-    print(len(after.display_name))
+    if expected in after.display_name:
+        return
+    await after.edit(nick=expected)
+
+@client.command()
+@guild()
+@admin()
+async def name(ctx, member: discord.Member, nick):
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""INSERT INTO allowed_names (id, name)
+            VALUES ({member.id}, '{nick}')
+            ON CONFLICT (id)
+            DO UPDATE
+            SET name = EXCLUDED.name;"""
+        )
+    conn.commit()
+    try:
+        await member.edit(nick=nick)
+        await ctx.send(f"{member} aka {nick}")
+    except: ## add the correct catch
+        await ctx.send(f"error insufficient perms")
+
+@client.command()
+@guild()
+@admin()
+async def runall(ctx):
+    for member in ctx.guild.members:
+        expected = get_expected(member.id)
+        if expected in member.display_name:
+            continue
+        try:
+            await member.edit(nick=expected)
+        except Exception as e:
+            print(e)
+
+@client.command()
+@guild()
+async def whoami(ctx):
+    await ctx.send(f'{get_expected(ctx.author.id)}')
+
+@client.command()
+@guild()
+async def whois(ctx, member: discord.Member):
+    await ctx.send(f'{get_expected(member.id)}')
 
 @client.command()
 async def status(ctx):
     await ctx.send('I am online!!')
     print(type(ctx.author.id))
 
-@client.command()
-async def name(ctx, member: discord.Member, nick):
-    print("name recieved")
-    await member.edit(nick=nick)
-    await ctx.send(f"{member} aka {nick}")
-
-
 @client.event
 async def on_message(message):
     if message.author == client.user:
         return
     await client.process_commands(message)
-
 
 @client.event
 async def on_ready():
