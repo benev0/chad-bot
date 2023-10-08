@@ -80,19 +80,18 @@ async def name(ctx, member: discord.Member, nick):
 @client.command()
 @guild()
 @admin()
-async def runall(ctx):
+async def runall(ctx, role=None: discord.role):
+    if role is not None and not ctx.guild.me.guild_permissions.manage_roles:
+        await ctx.send('This bot does not have permission to manage roles')
     for member in ctx.guild.members:
         expected = get_expected(member.id)
-        if expected is Null:
-            pass
-            ##give role
+        if expected is Null and role is not None:
+            try:
+                await member.add_roles(role)
         if expected in member.display_name:
             continue
         try:
-            await member.edit(nick=expected)
-        except Exception as e:
-            print(e)
-            ## give role
+            await on_member_update(member, member)
 
 @client.command()
 @guild()
