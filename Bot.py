@@ -41,6 +41,7 @@ def admin():
         return True
     return commands.check(predicate)
 
+
 def get_expected(id: int):
     with conn.cursor() as cur:
         cur.execute(f"SELECT NAME FROM allowed_names WHERE id = {id};")
@@ -49,13 +50,15 @@ def get_expected(id: int):
 
 @client.event
 async def on_member_update(before, after):
-    print("updating")
     expected = get_expected(after.id);
     if expected is None:
         return
     if expected in after.display_name:
+        print(f"{after.id} : {after.display_name} non-violation")
         return
     await after.edit(nick=expected)
+    print(f"{after.id} : {after.display_name} violation")
+
 
 @client.command()
 @guild()
@@ -77,34 +80,45 @@ async def name(ctx, member: discord.Member, nick):
     except:
         await ctx.send(f"Bot Could not compleate transaction")
 
-@client.command()
-@guild()
-@admin()
-async def runall(ctx, role=None: discord.role):
-    if role is not None and not ctx.guild.me.guild_permissions.manage_roles:
-        await ctx.send('This bot does not have permission to manage roles')
-    for member in ctx.guild.members:
-        expected = get_expected(member.id)
-        if expected is Null and role is not None:
-            try:
-                await member.add_roles(role)
-        if expected in member.display_name:
-            continue
-        try:
-            await on_member_update(member, member)
 
 @client.command()
 @guild()
 @admin()
-async def delete(ctx, member: discord.Member)
+async def runall(ctx, role: discord.Role):
+    if role is not None and not ctx.guild.me.guild_permissions.manage_roles:
+        await ctx.send('This bot does not have permission to manage roles')
+    for member in ctx.guild.members:
+        expected = get_expected(member.id)
+        if expected is None and role is not None:
+            try:
+                await member.add_roles(role)
+            except Exception as e:
+                print(f"role add failed for {member.id}")
+        if expected is None or expected in member.display_name:
+            continue
+        try:
+            await on_member_update(member, member)
+        except Exception as e:
+            print(f"enforce failed for {member.id}")
+
+
+@client.command()
+@guild()
+@admin()
+async def delete(ctx, member: discord.Member):
     with conn.cursor() as cur:
         cur.execute(f"DELETE FROM allowed_names WHERE id = {member.id}")
     conn.commit()
+
+    await ctx.send(f"{member} name policy deleted" )
+    print(f"{member.id} policy deleted")
+
 
 @client.command()
 @guild()
 async def whoami(ctx):
     await ctx.send(f'{get_expected(ctx.author.id)}')
+
 
 @client.command()
 @guild()
@@ -115,11 +129,11 @@ async def whois(ctx, member: discord.Member):
 async def status(ctx):
     await ctx.send('I am online!!')
 
-@client.event
-async def on_message(message):
-    if message.author == client.user:
-        return
-    await client.process_commands(message)
+# @client.event
+# async def on_message(message):
+#     if message.author == client.user:
+#         return
+#     await client.process_commands(message)
 
 @client.event
 async def on_ready():
