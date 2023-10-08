@@ -53,7 +53,7 @@ async def on_member_update(before, after):
     expected = get_expected(after.id);
     if expected is None:
         return
-    if expected in after.display_name:
+    if expected in after.display_name.lower():
         print(f"{after.id} : {after.display_name} non-violation")
         return
     await after.edit(nick=expected)
